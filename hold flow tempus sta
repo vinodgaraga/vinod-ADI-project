@@ -1,0 +1,46 @@
+Fixing Hold Violations:
+1. Load Hold-Critical Sessions
+Load at least one timing session from each of the four key PVT corners:
+SSm40, FFm40, SS125, FF125
+Since hold timing is not frequency-dependent and maximum voltage is the same for func and func1, loading either func or func1 is sufficient for hold analysis.​​​
+2. Load Setup-Critical Sessions
+Load at least one setup critical session from these four corners:
+SSm40, FFm40, SS125, FF125
+Additionally, load setup-critical sessions for both functional views (func and func1), wherever there is a difference in voltage or frequency:
+If the path is clocked only by 40 MHz, func is sufficient.
+If the path can be clocked by either 40 MHz or 80 MHz, both func and func1 should be loaded. This ensures we capture the worst-case path, as it's unclear whether 0.9 V @ 40 MHz or 1.1 V @ 80 MHz is worse for setup.
+3. Perform VT Swaps
+Swap SVL cells to SVN/SVU, and SVN cells to SVU, to improve hold timing (note that these swaps must be done only in data path and not clock path):​​​​​​
+eco_update_cell -insts <instance_name> -cells <target_cell>
+• Example:
+eco_update_cell -insts u_digtop/u_dig_pinnacleplus/radio_wrap_inst/radio_top_inst/rxbb_top_inst/rx_top_inst/turbo_decoder_VMED_inst/CTI_ccl_a_buf_00335 -cells SVU_BUF_SL50_10 
+• For large violations, do swaps in batch mode instead of one-by-one.
+• An example ECO Tcl file can be referenced from:
+/proj/pinnacleplus/open_shared_files/Adflow_Handoff/Drop15p2p5/from_sta_to_pnr/pinnacleplus_top/drop4_v21_e20_r2_mod/revd_teco_set3_VT_Swap.tcl 
+4. Apply ECOs Across All Views
+Source and apply the ECO Tcl script in all views loaded in Steps 1–3.
+For setup timing, run:
+report_timing -through <swapped_cell>
+and ensure the path meets hold with a reasonable positive slack
+5. Add Buffers or DEL cells
+If VT swaps do not resolve a hold violation, the next step is to consider adding buffers or DEL cells just before the Failing End Point (FEP).
+Important Considerations:
+Layout feasibility must be evaluated carefully during the ECO phase. Coordinate with the PnR team before making these changes.
+Buffers or DEL cells should be inserted as close as possible to the FEP.
+Check the fanout of the driving cell (cell before FEP) before inserting any new cells to avoid overloading the net.
+• Guidelines:
+• If the violation is marginal:
+• Insert buffers (SVN or SVU variants).
+• Re-run the same verification flow as in Step 4.
+• If the violation is significant:
+• Insert DEL cells (typically SVN variant).
+• Re-run the same verification flow as in Step 4.
+• Avoid using SVU DEL cells, as their delay variation across corners (FF to SS) is approximately 3x and can introduce instability.
+• eco_add_repeater -cells <> -name { } -pins { }
+• Example :
+• eco_add_repeater -cells SVN_BUF_ML50_2 \ -name {FE_HOLDC2100_PLN_FE_OCPN300103_bank_wrdata_25} \ -pins {u_digtop/u_basecamp_top/u_subsys_c_top/u_sram_top/u_unit_sr_6/BANK3/PLI_FE_OCPC369979}
+6. Iterate
+• Repeat Steps 3, 4 and 5 in a loop until:
+• Setup slack is improved to ≥ -200 ps, considering ~600 ps uncertainty.
+• Hold paths remain clean (no new violations introduced).
+
